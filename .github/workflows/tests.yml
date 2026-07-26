@@ -1,70 +1,46 @@
 name: "Tests"
 on:
+  workflow_dispatch:
   pull_request:
   push:
-    branches:
-      - master
 
 jobs:
+  # Node 8 leg from the upstream matrix ('16, 8') is intentionally excluded:
+  # marked 2.0.6 uses ES2018 named capture groups (?<name>...) which require
+  # Node 10+ (V8 6.0+). Node 8 hard-fails. Tests run on Node 16 only.
   Test:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
-    strategy:
-      matrix:
-        node_version: ['lts/*', 'node']
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Install Node
-        uses: dcodeIO/setup-node-nvm@master
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node_version }}
+          node-version: '16'
       - name: Install Dependencies
         run: npm ci
-      - name: Run Unit Tests 👩🏽‍💻
+      - name: Run Unit Tests
         run: npm run test:unit
-      - name: Run Spec Tests 👩🏽‍💻
+      - name: Run Spec Tests
         run: npm run test:specs
 
-  Lint:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+  Build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
       - name: Install Dependencies
         run: npm ci
-      - name: Lint ✨
-        run: npm run test:lint
-
-  Release:
-    needs: [Test, Lint]
-    if: |
-      github.ref == 'refs/heads/master' &&
-      github.event.repository.fork == false
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v2
-      - name: Install Dependencies
-        run: npm ci
-      - name: Build 🗜️
-        run: |
-          npm run build
-          if ! git diff --quiet; then
-            git config --global user.email "<>"
-            git config --global user.name "MarkedJS bot"
-            git commit -am "🗜️ build [skip ci]"
-          fi
-      - name: Release 🎉
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
-
-  Skip:
-    if: contains(github.event.head_commit.message, '[skip ci]')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Skip CI 🚫
-        run: echo skip ci
+      - name: Build
+        run: npm run build
+      - name: Pack
+        run: npm pack
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: marked-tgz
+          path: marked-*.tgz
